@@ -106,7 +106,7 @@ JNIEXPORT jlong JNICALL
 Java_dev_ihorshevchuk_piper_engine_PiperEngine_nativeCreate(
     JNIEnv* env, jobject /*thiz*/, jstring modelPath, jstring configPath,
     jstring espeakDataPath, jstring dataDir, jstring g2pwModelDir,
-    jint ortThreads) {
+    jint ortThreads, jboolean ortGraphOptAll) {
   const std::string model = JStringToStdString(env, modelPath);
   const std::string config = JStringToStdString(env, configPath);
   const std::string espeak = JStringToStdString(env, espeakDataPath);
@@ -125,6 +125,10 @@ Java_dev_ihorshevchuk_piper_engine_PiperEngine_nativeCreate(
   // Android port (0002 patch): thread count chosen by Kotlin OnnxThreadPolicy
   // from the device CPU count; the patched piper_create_options carries it.
   options.ort_intra_op_num_threads = ortThreads;
+  // Android port (0003 patch, perf spike): graph optimization level chosen
+  // by Kotlin OnnxGraphOptPolicy; the patched piper_create_options
+  // carries it next to the thread count.
+  options.ort_graph_opt_all = ortGraphOptAll == JNI_TRUE ? 1 : 0;
 
   // Returns the synthesizer directly, NULL on failure.
   // piper_create_with_options touches process-global espeak state

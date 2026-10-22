@@ -33,7 +33,10 @@ internal class SynthesisOrchestrator(private val native: NativeSynth) {
         val onSamples: (FloatArray) -> Unit = {},
         val onAlignment: (List<PhonemeGroup>) -> Unit = {},
         val onMarkers: (List<SpeechMarker>) -> Unit = {},
-        val onSampleRate: (Int) -> Unit = {}
+        val onSampleRate: (Int) -> Unit = {},
+        /** Perf spike (Oct 2026): per-sentence synthesis wall time vs audio length. */
+        val onSentenceTiming: (text: String, synthMs: Long, audioMs: Long) -> Unit =
+            { _, _, _ -> }
     )
 
     fun synthesize(
@@ -57,6 +60,7 @@ internal class SynthesisOrchestrator(private val native: NativeSynth) {
                 continue
             }
             val sentenceStartByteOffset = totalBytes
+            val sentenceStartNs = System.nanoTime()
             if (native.start(sentence.text, resolveOptions(sentence)) == NativeSynth.ERR_GENERIC) {
                 continue
             }
@@ -84,6 +88,13 @@ internal class SynthesisOrchestrator(private val native: NativeSynth) {
                 sentenceBytes += chunk.samples.size * 4L
             }
             totalBytes += sentenceBytes
+            val synthMs = (System.nanoTime() - sentenceStartNs) / 1_000_000
+            val audioMs = if (lastSampleRate > 0) {
+                (sentenceBytes / 4L) * 1000L / lastSampleRate
+            } else {
+                0L
+            }
+            callbacks.onSentenceTiming(sentence.text, synthMs, audioMs)
             if (sentence.range.location >= 0) {
                 val markers = if (groups.isNotEmpty()) {
                     SpeechMarker.generateMarkersWithAlignment(
