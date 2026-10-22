@@ -33,6 +33,16 @@ check), so a fresh `fetch-native-deps.sh` clone still builds correctly.
     The Android JNI layer fills the field from `OnnxThreadPolicy`
     (device CPU count, capped at 8); unset callers keep the default of 1.
 
+- `0003-ort-graph-opt-level-from-caller.patch` (perf spike, Oct 2026)
+  - Generated against piper1-gpl `404aefe` + patches 0001-0002.
+  - Upstream hard-codes `ORT_ENABLE_BASIC` graph optimization. The patch
+    appends an `ort_graph_opt_all` field to `piper_create_options`
+    (after `ort_intra_op_num_threads`, gated by `struct_size`) and uses
+    `ORT_ENABLE_ALL` when it is non-zero, BASIC otherwise. The Android
+    JNI layer fills the field from `OnnxGraphOptPolicy`. Purpose of the
+    spike: A/B BASIC vs ALL on weak hardware (synthesis RTF, voice-load
+    time, and INT8 correctness) before deciding whether ALL should ship.
+
 If the pinned piper1-gpl SHA moves, regenerate: apply manually in a
 scratch checkout, `git diff` it back out, and replace this file. The CMake
 hook fails the build loudly if a patch no longer applies.

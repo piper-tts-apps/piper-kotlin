@@ -1,0 +1,57 @@
+diff --git a/libpiper/include/piper.h b/libpiper/include/piper.h
+index 28fb869..4f4c04a 100644
+--- a/libpiper/include/piper.h
++++ b/libpiper/include/piper.h
+@@ -230,6 +230,18 @@ typedef struct piper_create_options {
+    * OnnxThreadPolicy based on the device's CPU count.
+    */
+   int ort_intra_op_num_threads;
++
++  /**
++   * \brief Use ORT_ENABLE_ALL graph optimizations (Android port field).
++   *
++   * Appended after ort_intra_op_num_threads per the struct_size
++   * versioning rule above; read only when struct_size covers it.
++   * Non-zero asks the session for GraphOptimizationLevel::ORT_ENABLE_ALL
++   * instead of the historical ORT_ENABLE_BASIC. Callers that leave it
++   * unset keep BASIC. The Android JNI layer fills it from
++   * OnnxGraphOptPolicy (perf spike, Oct 2026).
++   */
++  int ort_graph_opt_all;
+ } piper_create_options;
+ 
+ /**
+diff --git a/libpiper/src/piper.cpp b/libpiper/src/piper.cpp
+index 38772d3..4bd5168 100644
+--- a/libpiper/src/piper.cpp
++++ b/libpiper/src/piper.cpp
+@@ -90,6 +90,15 @@ auto piper_create_with_options(const piper_create_options *options)
+     }
+   }
+ 
++  // Android port: caller-chosen ORT graph optimization level
++  // (OnnxGraphOptPolicy via JNI). Unset callers keep ORT_ENABLE_BASIC.
++  bool ort_graph_opt_all = false;
++  if (options->struct_size >=
++      offsetof(piper_create_options, ort_graph_opt_all) +
++          sizeof(options->ort_graph_opt_all)) {
++    ort_graph_opt_all = options->ort_graph_opt_all != 0;
++  }
++
+   // Resolve espeak_data_path via data_dir fallback
+   std::string resolved_espeak_data;
+   const char *final_espeak_data_path = espeak_data_path;
+@@ -317,8 +326,12 @@ auto piper_create_with_options(const piper_create_options *options)
+   // stays 1 and execution stays sequential - only intra-op scales.
+   synth->session_options.SetIntraOpNumThreads(ort_intra_op_threads);
+   synth->session_options.SetInterOpNumThreads(1);
++  // Android port patch: caller-chosen ORT graph optimization level
++  // (ort_graph_opt_all in piper_create_options); BASIC unless the
++  // caller asked for ALL.
+   synth->session_options.SetGraphOptimizationLevel(
+-      GraphOptimizationLevel::ORT_ENABLE_BASIC);
++      ort_graph_opt_all ? GraphOptimizationLevel::ORT_ENABLE_ALL
++                        : GraphOptimizationLevel::ORT_ENABLE_BASIC);
+   synth->session_options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
+ 
+ #if !defined(WIN32)

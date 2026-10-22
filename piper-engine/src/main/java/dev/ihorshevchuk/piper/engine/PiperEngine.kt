@@ -131,7 +131,8 @@ class PiperEngine(
                     onSamples = onSamples,
                     onAlignment = onAlignment,
                     onMarkers = onMarkers,
-                    onSampleRate = { currentSampleRate.set(it) }
+                    onSampleRate = { currentSampleRate.set(it) },
+                    onSentenceTiming = ::logSentenceTiming
                 )
             )
         } finally {
@@ -167,7 +168,8 @@ class PiperEngine(
                     onSamples = onSamples,
                     onAlignment = onAlignment,
                     onMarkers = onMarkers,
-                    onSampleRate = { currentSampleRate.set(it) }
+                    onSampleRate = { currentSampleRate.set(it) },
+                    onSentenceTiming = ::logSentenceTiming
                 )
             )
         } finally {
@@ -313,15 +315,34 @@ class PiperEngine(
         }
     }
 
+    /** Perf spike (Oct 2026): per-sentence timing line for logcat bench runs. */
+    private fun logSentenceTiming(text: String, synthMs: Long, audioMs: Long) {
+        val rtf = if (synthMs > 0) audioMs.toDouble() / synthMs else 0.0
+        println(
+            "PIPER_PERF sentence synthMs=$synthMs audioMs=$audioMs " +
+                "rtf=${"%.2f".format(rtf)} text=${text.take(40)}"
+        )
+    }
+
     /** Engine-thread only. Throws [PiperException] when creation fails. */
     private fun createLocked() {
+        val threads = OnnxThreadPolicy.intraOpThreads()
+        val graphOptAll = OnnxGraphOptPolicy.useAllOptimizations()
+        val startNs = System.nanoTime()
         handle = nativeCreate(
             options.modelPath,
             options.configPath,
             resolvedEspeakPath,
             options.dataDir,
             options.g2pwModelDir,
-            OnnxThreadPolicy.intraOpThreads()
+            threads,
+            graphOptAll
+        )
+        val createMs = (System.nanoTime() - startNs) / 1_000_000
+        // Perf spike (Oct 2026): voice-load timing, visible in logcat.
+        println(
+            "PIPER_PERF create ms=$createMs threads=$threads " +
+                "graphOptAll=$graphOptAll model=${options.modelPath}"
         )
         if (handle == 0L) {
             throw PiperException("piper_create_with_options failed for ${options.modelPath}")
@@ -453,7 +474,8 @@ class PiperEngine(
         espeakDataPath: String?,
         dataDir: String?,
         g2pwModelDir: String?,
-        ortThreads: Int
+        ortThreads: Int,
+        ortGraphOptAll: Boolean
     ): Long
 
     private external fun nativeDestroy(handle: Long)
