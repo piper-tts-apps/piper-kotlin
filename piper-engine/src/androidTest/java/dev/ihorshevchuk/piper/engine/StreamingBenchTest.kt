@@ -21,9 +21,7 @@ import kotlin.math.sqrt
  * chunks. Proof of streaming is the chunk count: monolithic condition A
  * produced chunk counts equal to clause counts (short 2, medium 3,
  * long 6); split synthesis must produce more, smaller chunks, and TTFA
- * must stop scaling with first-sentence length. Timing comes from the
- * timing-only PIPER_PERF lines in PiperEngine / SynthesisOrchestrator
- * (branch baseline/perf-timing-only) plus per-text lines printed here:
+ * must stop scaling with first-sentence length. Timing comes from the per-text lines printed here:
  * PIPER_BENCH result carries total samples, chunk count, time to first
  * chunk (synthesis-side, first onSamples callback), wall time, audio
  * length and RMS (non-silence correctness proxy; it cannot replace a
@@ -98,8 +96,7 @@ class StreamingBenchTest {
             "PIPER_BENCH begin precision=$precision model=$modelName bytes=${model.length()}"
         )
         val engine = newEngine(model, config)
-        // Warm-up synthesis (discarded); it triggers engine creation, so the
-        // PIPER_PERF create line printed during it is this engine's create.
+        // Warm-up synthesis (discarded); it also triggers engine creation.
         synthOnce(engine, "Warm up.", "warmup", precision, 0)
         for (run in 1..2) {
             synthOnce(engine, TEXT_SHORT, "short", precision, run)
