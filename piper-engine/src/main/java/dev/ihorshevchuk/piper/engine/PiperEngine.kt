@@ -90,11 +90,25 @@ class PiperEngine(
 
     init {
         val modelFile = File(options.modelPath)
-        if (!modelFile.isFile) {
+        if (!modelFile.isFile && !hasSplitPair(modelFile)) {
             throw PiperException("Voice model not found: ${options.modelPath}")
         }
         runNative("piper_create_with_options") { createLocked() }
         cachedNativeVersion = runNative("piper_version") { nativeVersion() }
+    }
+
+    /**
+     * Split voices store only an encoder/decoder pair next to the model
+     * path (`<stem>.encoder.onnx` / `<stem>.decoder.onnx`): the native
+     * layer loads the pair instead of the model file when both parts
+     * are present, so a missing model file is an error only when no
+     * complete pair exists either.
+     */
+    private fun hasSplitPair(modelFile: File): Boolean {
+        val stem = modelFile.name.removeSuffix(".onnx")
+        val dir = modelFile.parentFile ?: return false
+        return File(dir, "$stem.encoder.onnx").isFile &&
+            File(dir, "$stem.decoder.onnx").isFile
     }
 
     /**
