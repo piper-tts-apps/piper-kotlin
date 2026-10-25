@@ -1,50 +1,64 @@
+diff --git a/libpiper/include/piper.h b/libpiper/include/piper.h
+index c9ef282..f5852bb 100644
 --- a/libpiper/include/piper.h
 +++ b/libpiper/include/piper.h
-@@ -220,6 +220,16 @@
-    * data_dir/espeak-ng-data and data_dir/g2pw / data_dir.
+@@ -237,6 +237,18 @@ typedef struct piper_create_options {
+    * This field is ABI-versioned: it is only read when struct_size covers it.
     */
-   const char *data_dir;
+   const char *openjtalk_dict_dir;
 +
 +  /**
 +   * \brief Number of ONNX Runtime intra-op threads (Android port field).
 +   *
-+   * Appended at the end per the struct_size versioning rule above; read only
-+   * when struct_size covers it. Callers that leave it unset get the
-+   * historical default of 1. The Android JNI layer fills it from
-+   * OnnxThreadPolicy based on the device's CPU count.
++   * Appended at the end per the struct_size versioning rule above (after
++   * upstream's openjtalk_dict_dir, which took the previous tail slot);
++   * read only when struct_size covers it. Callers that leave it unset get
++   * upstream's built-in default (hardware_concurrency/2, capped at 4).
++   * The Android JNI layer fills it from OnnxThreadPolicy based on the
++   * device's CPU count (cores-2, capped at 8 on the A13: 6).
 +   */
 +  int ort_intra_op_num_threads;
  } piper_create_options;
  
  /**
+@@ -253,6 +265,7 @@ static inline void piper_init_create_options(piper_create_options *opts) {
+     opts->g2pw_model_dir = NULL;
+     opts->data_dir = NULL;
+     opts->openjtalk_dict_dir = NULL;
++    opts->ort_intra_op_num_threads = 0;
+   }
+ }
+ 
+diff --git a/libpiper/src/piper.cpp b/libpiper/src/piper.cpp
+index 8d6bd0f..3478057 100644
 --- a/libpiper/src/piper.cpp
 +++ b/libpiper/src/piper.cpp
-@@ -58,6 +58,17 @@
-     data_dir_opt = options->data_dir;
+@@ -109,6 +109,17 @@ auto piper_create_with_options(const piper_create_options *options)
+           sizeof(options->openjtalk_dict_dir)) {
+     openjtalk_dict_dir_opt = options->openjtalk_dict_dir;
    }
- 
 +  // Android port: intra-op thread count chosen by the caller (Kotlin
-+  // OnnxThreadPolicy). Unset callers keep the historical default of 1.
-+  int ort_intra_op_threads = 1;
++  // OnnxThreadPolicy). Unset callers keep upstream's built-in default.
++  int ort_intra_op_threads = 0;
 +  if (options->struct_size >=
 +      offsetof(piper_create_options, ort_intra_op_num_threads) +
 +          sizeof(options->ort_intra_op_num_threads)) {
-+    if (options->ort_intra_op_num_threads > 0) {
-+      ort_intra_op_threads = options->ort_intra_op_num_threads;
-+    }
++    ort_intra_op_threads = options->ort_intra_op_num_threads;
 +  }
-+
++  if (ort_intra_op_threads <= 0) {
++    ort_intra_op_threads = default_intra_op_threads();
++  }
+ 
    // Resolve espeak_data_path via data_dir fallback
    std::string resolved_espeak_data;
-   const char *final_espeak_data_path = espeak_data_path;
-@@ -263,7 +274,10 @@
+@@ -365,7 +376,10 @@ auto piper_create_with_options(const piper_create_options *options)
    synth->session_options.DisableCpuMemArena();
    synth->session_options.DisableMemPattern();
    synth->session_options.DisableProfiling();
--  synth->session_options.SetIntraOpNumThreads(1);
+-  synth->session_options.SetIntraOpNumThreads(default_intra_op_threads());
 +  // Android port patch: use all cores for ORT. The count arrives via
-+  // piper_create_options from the caller (Kotlin OnnxThreadPolicy); inter-op
-+  // stays 1 and execution stays sequential - only intra-op scales.
++  // piper_create_options from the caller (Kotlin OnnxThreadPolicy);
++  // inter-op stays 1 and execution stays sequential - only intra-op scales.
 +  synth->session_options.SetIntraOpNumThreads(ort_intra_op_threads);
    synth->session_options.SetInterOpNumThreads(1);
    synth->session_options.SetGraphOptimizationLevel(

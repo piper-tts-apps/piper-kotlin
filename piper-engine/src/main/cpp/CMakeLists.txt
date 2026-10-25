@@ -93,6 +93,7 @@ set(PIPER_SOURCES
 
 add_library(piper_jni SHARED
   piper_jni.cpp
+  japanese_phonemizer_stub.cpp
   ${PIPER_SOURCES}
   ${ESPEAK_SOURCES}
   ${UCD_SOURCES}
@@ -108,6 +109,7 @@ target_include_directories(piper_jni PRIVATE
   "${ESPEAK_NG_DIR}/src/speechPlayer/include"   # speechPlayer.h
   "${SONIC_DIR}"                                # sonic.h
   "${PIPER1_GPL_DIR}/libpiper/include"          # piper.h
+  "${PIPER1_GPL_DIR}/libpiper/src"              # japanese_phonemizer.h (for the stub)
   "${ONNXRUNTIME_DIR}/include"                   # onnxruntime C/C++ API
 )
 

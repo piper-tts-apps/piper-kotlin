@@ -9,7 +9,7 @@ check), so a fresh `fetch-native-deps.sh` clone still builds correctly.
 ## Patches
 
 - `0001-espeak-refcount-no-throw-create.patch`
-  - Generated against piper1-gpl `404aefe` (Sep 2026).
+  - Generated against piper1-gpl `404aefe` (Sep 2026); regenerated against `74ac24e` (Oct 2026, PR #341 merge) - hunks moved to the new create/session code, which now also covers the split encoder/decoder session creation in the no-throw wrap.
   - espeak-ng is process-global, but `piper_free()` called
     `espeak_Terminate()` per synthesizer. With several live synthesizers
     (one per `PiperEngine`) freeing one engine killed espeak for the whole
@@ -23,7 +23,7 @@ check), so a fresh `fetch-native-deps.sh` clone still builds correctly.
     `PiperException`) instead of aborting through JNI.
 
 - `0002-ort-intraop-threads-from-cpu-count.patch`
-  - Generated against piper1-gpl `404aefe` (Sep 2026).
+  - Generated against piper1-gpl `404aefe` (Sep 2026); regenerated against `74ac24e` (Oct 2026, PR #341 merge) - hunks moved to the new create/session code, which now also covers the split encoder/decoder session creation in the no-throw wrap.
   - Upstream hard-codes `SetIntraOpNumThreads(1)`, leaving 7 of 8 cores
     idle on e.g. a Galaxy A13 - one sentence took 7-10 s to synthesize,
     slower than realtime. The patch appends an `ort_intra_op_num_threads`
