@@ -1,16 +1,16 @@
 diff --git a/libpiper/src/piper.cpp b/libpiper/src/piper.cpp
-index 56b61b0..4739ea8 100644
+index 8d6bd0f..6d8eb4f 100644
 --- a/libpiper/src/piper.cpp
 +++ b/libpiper/src/piper.cpp
-@@ -7,6 +7,7 @@
+@@ -10,6 +10,7 @@
  #include <filesystem>
  #include <fstream>
  #include <limits>
 +#include <mutex>
+ #include <thread>
  #include <unordered_map>
  
- #ifdef WIN32
-@@ -26,6 +27,26 @@
+@@ -34,6 +35,26 @@
  
  using json = nlohmann::json;
  
@@ -34,10 +34,10 @@ index 56b61b0..4739ea8 100644
 +}
 +}  // namespace
 +
- auto piper_create_with_options(const piper_create_options *options)
-     -> struct piper_synthesizer * {
-   // onnx
-@@ -89,16 +110,33 @@ auto piper_create_with_options(const piper_create_options *options)
+ // Decoder chunking for streaming. A context of STREAM_CONTEXT_FRAMES latent
+ // frames on each side makes the chunked output identical to decoding the
+ // whole sentence at once (the decoder's receptive field is smaller).
+@@ -141,16 +162,33 @@ auto piper_create_with_options(const piper_create_options *options)
    }
  
    std::ifstream config_stream(config_path_str);
@@ -76,18 +76,21 @@ index 56b61b0..4739ea8 100644
    }
  
    auto *synth = new piper_synthesizer();
-@@ -277,8 +315,20 @@ auto piper_create_with_options(const piper_create_options *options)
+@@ -379,6 +417,10 @@ auto piper_create_with_options(const piper_create_options *options)
    ::MultiByteToWideChar(CP_ACP, 0, model_path, -1, &model_path_wc[0], sz);
    auto model_path_ort = &model_path_wc[0];
  #endif
--  synth->session = std::make_unique<Ort::Session>(
--      Ort::Session(ort_env, model_path_ort, synth->session_options));
-+  // Android port patch: a missing/corrupt model must fail creation with
-+  // nullptr (Kotlin turns it into PiperException), never abort the process
-+  // by throwing through JNI.
++  // Android port patch: a missing/corrupt model (monolithic or split
++  // encoder/decoder) must fail creation with nullptr (Kotlin turns it into
++  // PiperException), never abort the process by throwing through JNI.
 +  try {
-+    synth->session = std::make_unique<Ort::Session>(
-+        Ort::Session(ort_env, model_path_ort, synth->session_options));
+   auto encoder_path = split_model_path(model_path, "encoder");
+   auto decoder_path = split_model_path(model_path, "decoder");
+   if (std::filesystem::exists(encoder_path) &&
+@@ -395,6 +437,14 @@ auto piper_create_with_options(const piper_create_options *options)
+     synth->session = std::make_unique<Ort::Session>(
+         Ort::Session(ort_env, model_path_ort, synth->session_options));
+   }
 +  } catch (...) {
 +    if (espeak_acquired) {
 +      std::lock_guard<std::mutex> lock(g_espeak_ref_mutex);
@@ -99,7 +102,7 @@ index 56b61b0..4739ea8 100644
  
    return synth;
  }
-@@ -298,7 +348,9 @@ void piper_free(struct piper_synthesizer *synth) {
+@@ -414,7 +464,9 @@ void piper_free(struct piper_synthesizer *synth) {
      return;
    }
    if (synth->phoneme_type == PhonemeType::Espeak) {
